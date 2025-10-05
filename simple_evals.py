@@ -262,11 +262,18 @@ def main():
 
     if args.model:
         models_chosen = args.model.split(",")
+        selected = {}
         for model_name in models_chosen:
-            if model_name not in models:
-                print(f"Error: Model '{model_name}' not found.")
-                return
-        models = {model_name: models[model_name] for model_name in models_chosen}
+            if model_name in models:
+                selected[model_name] = models[model_name]
+            else:
+                # Fallback: if it looks like a GigaChat model, create a dynamic sampler
+                if "giga" in model_name.lower():
+                    selected[model_name] = GigaChatSampler(model=model_name)
+                else:
+                    print(f"Error: Model '{model_name}' not found.")
+                    return
+        models = selected
 
     print(f"Running with args {args}")
 
