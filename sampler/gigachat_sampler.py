@@ -1,5 +1,6 @@
 import os
 import time
+import json
 from typing import Any
 
 from ..types import MessageList, SamplerBase, SamplerResponse
@@ -62,15 +63,32 @@ class GigaChatSampler(SamplerBase):
     def _to_gigachat_messages(self, message_list: MessageList) -> list[Messages]:
         giga_chat_messages: list[Messages] = []
         for msg in message_list:
-            role = str(msg.get("role"))
-            content = msg.get("content", "")
-            # Map roles to GigaChat enum values
-            if role not in {"user", "assistant", "system", "function"}:
-                # Fallback to user if unknown
-                role = "user"
-            giga_chat_messages.append(
-                Messages(role=MessagesRole(role), content=str(content))
-            )
+            role_raw = str(msg.get("role"))
+            # Normalize roles to GigaChat-supported ones
+            role_map = {
+                "user": "user",
+                "assistant": "assistant",
+                "system": "system",
+                "function": "function",
+                # Common alternates from other providers
+                "developer": "system",
+                "tool": "function",
+            }
+            role = role_map.get(role_raw, "user")
+
+            content_val = msg.get("content", "")
+            if content_val is None:
+                content_str = ""
+            elif isinstance(content_val, str):
+                content_str = content_val
+            else:
+                # Messages.content is a string in GigaChat; serialize complex content
+                try:
+                    content_str = json.dumps(content_val, ensure_ascii=False)
+                except Exception:
+                    content_str = str(content_val)
+
+            giga_chat_messages.append(Messages(role=MessagesRole(role), content=content_str))
         return giga_chat_messages
 
     def __call__(self, message_list: MessageList) -> SamplerResponse:
