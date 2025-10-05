@@ -30,6 +30,8 @@ class GigaChatSampler(SamplerBase):
         scope: str | None = None,
         base_url: str | None = None,
         verify_ssl_certs: bool | None = None,
+        max_retries: int | None = None,
+        backoff_base: int | None = None,
     ) -> None:
         self.model = model
         self.system_message = system_message
@@ -56,6 +58,21 @@ class GigaChatSampler(SamplerBase):
             raise RuntimeError(
                 "GigaChat auth not configured. Provide GIGACHAT_CREDENTIALS or GIGACHAT_ACCESS_TOKEN or GIGACHAT_USER/PASSWORD."
             )
+
+        # Retry customization (env overrides defaults, explicit args override env)
+        env_max_retries = os.environ.get("GIGACHAT_MAX_RETRIES")
+        env_backoff_base = os.environ.get("GIGACHAT_BACKOFF_BASE")
+        try:
+            env_max_retries_int = int(env_max_retries) if env_max_retries is not None else None
+        except Exception:
+            env_max_retries_int = None
+        try:
+            env_backoff_base_int = int(env_backoff_base) if env_backoff_base is not None else None
+        except Exception:
+            env_backoff_base_int = None
+
+        self.max_retries = max_retries if max_retries is not None else (env_max_retries_int if env_max_retries_int is not None else 5)
+        self.backoff_base = backoff_base if backoff_base is not None else (env_backoff_base_int if env_backoff_base_int is not None else 2)
 
     def _pack_message(self, role: str, content: Any) -> dict[str, Any]:
         return {"role": role, "content": content}
@@ -101,7 +118,7 @@ class GigaChatSampler(SamplerBase):
         trial = 0
 
         def _retry_sleep(current_trial: int, kind: str, error: Exception) -> int:
-            exception_backoff = 2 ** current_trial
+            exception_backoff = (self.backoff_base ** current_trial) if self.backoff_base and self.backoff_base > 1 else (2 ** current_trial)
             print(f"GigaChat {kind} error; retry {current_trial} after {exception_backoff} sec", error)
             time.sleep(exception_backoff)
             return current_trial + 1
@@ -155,16 +172,16 @@ class GigaChatSampler(SamplerBase):
                 )
             except AuthenticationError as e:
                 trial = _retry_sleep(trial, "auth", e)
-                if trial >= 5:
+                if trial >= self.max_retries:
                     raise
             except ResponseError as e:
                 trial = _retry_sleep(trial, "response", e)
-                if trial >= 5:
+                if trial >= self.max_retries:
                     raise
             except Exception as e:
                 trial = _retry_sleep(trial, "generic", e)
                 # after several retries, propagate
-                if trial >= 5:
+                if trial >= self.max_retries:
                     raise
 
 
