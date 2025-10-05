@@ -99,6 +99,13 @@ class GigaChatSampler(SamplerBase):
             ] + message_list
 
         trial = 0
+
+        def _retry_sleep(current_trial: int, kind: str, error: Exception) -> int:
+            exception_backoff = 2 ** current_trial
+            print(f"GigaChat {kind} error; retry {current_trial} after {exception_backoff} sec", error)
+            time.sleep(exception_backoff)
+            return current_trial + 1
+
         while True:
             try:
                 # Build Chat payload
@@ -132,19 +139,30 @@ class GigaChatSampler(SamplerBase):
                 # Parse response
                 content = completion.choices[0].message.content if completion.choices else ""
                 usage = getattr(completion, "usage", None)
+                x_headers = getattr(completion, "x_headers", None)
+                metadata: dict[str, Any] = {
+                    "usage": usage.dict() if hasattr(usage, "dict") and usage else None,
+                    "x_headers": x_headers if x_headers else None,
+                    "model": getattr(completion, "model", None),
+                    "created": getattr(completion, "created", None),
+                    "thread_id": getattr(completion, "thread_id", None),
+                    "message_id": getattr(completion, "message_id", None),
+                }
                 return SamplerResponse(
                     response_text=content or "",
                     actual_queried_message_list=message_list,
-                    response_metadata={"usage": usage.dict() if hasattr(usage, "dict") and usage else None},
+                    response_metadata=metadata,
                 )
+            except AuthenticationError as e:
+                trial = _retry_sleep(trial, "auth", e)
+                if trial >= 5:
+                    raise
+            except ResponseError as e:
+                trial = _retry_sleep(trial, "response", e)
+                if trial >= 5:
+                    raise
             except Exception as e:
-                exception_backoff = 2**trial
-                print(
-                    f"GigaChat error; retry {trial} after {exception_backoff} sec",
-                    e,
-                )
-                time.sleep(exception_backoff)
-                trial += 1
+                trial = _retry_sleep(trial, "generic", e)
                 # after several retries, propagate
                 if trial >= 5:
                     raise
