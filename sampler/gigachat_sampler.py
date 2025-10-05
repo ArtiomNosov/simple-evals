@@ -74,6 +74,35 @@ class GigaChatSampler(SamplerBase):
         self.max_retries = max_retries if max_retries is not None else (env_max_retries_int if env_max_retries_int is not None else 5)
         self.backoff_base = backoff_base if backoff_base is not None else (env_backoff_base_int if env_backoff_base_int is not None else 2)
 
+        # Build and keep a persistent SDK client to avoid repeated OAuth under concurrency
+        client_kwargs: dict[str, Any] = {}
+        if self.base_url is not None:
+            client_kwargs["base_url"] = self.base_url
+        if self.scope is not None:
+            client_kwargs["scope"] = self.scope
+        if self.verify_ssl_certs is not None:
+            client_kwargs["verify_ssl_certs"] = self.verify_ssl_certs
+
+        # Prefer preissued access token to skip OAuth
+        if self.access_token:
+            client_kwargs["access_token"] = self.access_token
+        elif self.credentials:
+            client_kwargs["credentials"] = self.credentials
+        elif self.user and self.password:
+            client_kwargs["user"] = self.user
+            client_kwargs["password"] = self.password
+
+        self._client = GigaChatSyncClient(**client_kwargs)
+
+    def close(self) -> None:
+        try:
+            self._client.close()
+        except Exception:
+            pass
+
+    def __del__(self) -> None:
+        self.close()
+
     def _pack_message(self, role: str, content: Any) -> dict[str, Any]:
         return {"role": role, "content": content}
 
@@ -133,25 +162,7 @@ class GigaChatSampler(SamplerBase):
                     max_tokens=self.max_tokens,
                 )
 
-                # Instantiate SDK client using provided params and env
-                client_kwargs: dict[str, Any] = {}
-                if self.base_url is not None:
-                    client_kwargs["base_url"] = self.base_url
-                if self.scope is not None:
-                    client_kwargs["scope"] = self.scope
-                if self.verify_ssl_certs is not None:
-                    client_kwargs["verify_ssl_certs"] = self.verify_ssl_certs
-
-                if self.credentials:
-                    client_kwargs["credentials"] = self.credentials
-                elif self.access_token:
-                    client_kwargs["access_token"] = self.access_token
-                elif self.user and self.password:
-                    client_kwargs["user"] = self.user
-                    client_kwargs["password"] = self.password
-
-                with GigaChatSyncClient(**client_kwargs) as giga:
-                    completion = giga.chat(chat_payload)
+                completion = self._client.chat(chat_payload)
 
                 # Parse response
                 content = completion.choices[0].message.content if completion.choices else ""
