@@ -23,6 +23,7 @@ from .sampler.chat_completion_sampler import (
 from .sampler.claude_sampler import ClaudeCompletionSampler, CLAUDE_SYSTEM_MESSAGE_LMSYS
 from .sampler.o_chat_completion_sampler import OChatCompletionSampler
 from .sampler.responses_sampler import ResponsesSampler
+from .sampler.gigachat_sampler import GigaChatSampler
 from .simpleqa_eval import SimpleQAEval
 
 
@@ -232,6 +233,24 @@ def main():
         ),
         "claude-3-haiku-20240307": ClaudeCompletionSampler(
             model="claude-3-haiku-20240307",
+        ),
+        "GigaChat": GigaChatSampler(
+            model="GigaChat",
+        ),
+        "GigaChat-2": GigaChatSampler(
+            model="GigaChat-2",
+        ),
+        "GigaChat-2-Pro": GigaChatSampler(
+            model="GigaChat-2-Pro",
+        ),
+        "GigaChat-2-Max": GigaChatSampler(
+            model="GigaChat-2-Max",
+        ),
+        "GigaChat-Pro": GigaChatSampler(
+            model="GigaChat-Pro",
+        ),
+        "GigaChat-Max": GigaChatSampler(
+            model="GigaChat-Max",
         ),
     }
 
