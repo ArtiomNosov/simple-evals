@@ -23,6 +23,7 @@ from .sampler.chat_completion_sampler import (
 from .sampler.claude_sampler import ClaudeCompletionSampler, CLAUDE_SYSTEM_MESSAGE_LMSYS
 from .sampler.o_chat_completion_sampler import OChatCompletionSampler
 from .sampler.responses_sampler import ResponsesSampler
+from .sampler.gigachat_sampler import GigaChatSampler
 from .simpleqa_eval import SimpleQAEval
 
 
@@ -233,6 +234,24 @@ def main():
         "claude-3-haiku-20240307": ClaudeCompletionSampler(
             model="claude-3-haiku-20240307",
         ),
+        "GigaChat": GigaChatSampler(
+            model="GigaChat",
+        ),
+        "GigaChat-2": GigaChatSampler(
+            model="GigaChat-2",
+        ),
+        "GigaChat-2-Pro": GigaChatSampler(
+            model="GigaChat-2-Pro",
+        ),
+        "GigaChat-2-Max": GigaChatSampler(
+            model="GigaChat-2-Max",
+        ),
+        "GigaChat-Pro": GigaChatSampler(
+            model="GigaChat-Pro",
+        ),
+        "GigaChat-Max": GigaChatSampler(
+            model="GigaChat-Max",
+        ),
     }
 
     if args.list_models:
@@ -243,11 +262,18 @@ def main():
 
     if args.model:
         models_chosen = args.model.split(",")
+        selected = {}
         for model_name in models_chosen:
-            if model_name not in models:
-                print(f"Error: Model '{model_name}' not found.")
-                return
-        models = {model_name: models[model_name] for model_name in models_chosen}
+            if model_name in models:
+                selected[model_name] = models[model_name]
+            else:
+                # Fallback: if it looks like a GigaChat model, create a dynamic sampler
+                if "giga" in model_name.lower():
+                    selected[model_name] = GigaChatSampler(model=model_name)
+                else:
+                    print(f"Error: Model '{model_name}' not found.")
+                    return
+        models = selected
 
     print(f"Running with args {args}")
 
@@ -339,8 +365,8 @@ def main():
         for eval_name in evals_list:
             try:
                 evals[eval_name] = get_evals(eval_name, args.debug)
-            except Exception:
-                print(f"Error: eval '{eval_name}' not found.")
+            except Exception as e:
+                print(f"Error: eval '{eval_name}' not found. Error:{e}")
                 return
     else:
         evals = {

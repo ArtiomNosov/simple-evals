@@ -10,6 +10,7 @@ from .sampler.chat_completion_sampler import (
     ChatCompletionSampler,
 )
 from .sampler.o_chat_completion_sampler import OChatCompletionSampler
+from .sampler.gigachat_sampler import GigaChatSampler
 
 
 def main():
@@ -42,6 +43,24 @@ def main():
         "o3-mini_low": OChatCompletionSampler(
             model="o3-mini",
             reasoning_effort="low",
+        ),
+        "GigaChat": GigaChatSampler(
+            model="GigaChat",
+        ),
+        "GigaChat-2": GigaChatSampler(
+            model="GigaChat-2",
+        ),
+        "GigaChat-2-Pro": GigaChatSampler(
+            model="GigaChat-2-Pro",
+        ),
+        "GigaChat-2-Max": GigaChatSampler(
+            model="GigaChat-2-Max",
+        ),
+        "GigaChat-Pro": GigaChatSampler(
+            model="GigaChat-Pro",
+        ),
+        "GigaChat-Max": GigaChatSampler(
+            model="GigaChat-Max",
         ),
     }
 
