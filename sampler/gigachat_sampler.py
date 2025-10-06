@@ -3,7 +3,7 @@ import time
 import json
 from typing import Any
 
-from ..types import MessageList, SamplerBase, SamplerResponse
+from .._types import MessageList, SamplerBase, SamplerResponse
 
 try:
     from gigachat import GigaChat as GigaChatSyncClient
@@ -29,6 +29,7 @@ class GigaChatSampler(SamplerBase):
         max_tokens: int | None = 1024,
         scope: str | None = None,
         base_url: str | None = None,
+        auth_url: str | None = None,
         verify_ssl_certs: bool | None = None,
         max_retries: int | None = None,
         backoff_base: int | None = None,
@@ -39,29 +40,32 @@ class GigaChatSampler(SamplerBase):
         self.max_tokens = max_tokens
 
         # Read environment with sensible precedence: explicit args override env
-        env_scope = os.environ.get("GIGACHAT_SCOPE")
-        env_base_url = os.environ.get("GIGACHAT_BASE_URL")
-        env_verify_ssl_certs = os.environ.get("GIGACHAT_VERIFY_SSL_CERTS")
+        env_scope = os.environ.get("GIGA_SCOPE")
+        env_base_url = os.environ.get("GIGA_BASE_URL")
+        env_auth_url = os.environ.get("GIGA_AUTH_URL")
+        env_verify_ssl_certs = os.environ.get("GIGA_VERIFY_SSL_CERTS")
 
         self.scope = scope or env_scope
         self.base_url = base_url or env_base_url
+        self.auth_url = auth_url or env_auth_url
         self.verify_ssl_certs = verify_ssl_certs if verify_ssl_certs is not None else env_verify_ssl_certs
 
         # Auth methods from env
-        self.credentials = os.environ.get("GIGACHAT_CREDENTIALS")
-        self.user = os.environ.get("GIGACHAT_USER")
-        self.password = os.environ.get("GIGACHAT_PASSWORD")
-        self.access_token = os.environ.get("GIGACHAT_ACCESS_TOKEN")
+        self.credentials = os.environ.get("GIGA_CREDENTIALS")
+        self.user = os.environ.get("GIGA_USER")
+        self.password = os.environ.get("GIGA_PASSWORD")
+        self.access_token = os.environ.get("GIGA_ACCESS_TOKEN")
 
         # Require at least one auth method
         if not (self.credentials or self.access_token or (self.user and self.password)):
             raise RuntimeError(
-                "GigaChat auth not configured. Provide GIGACHAT_CREDENTIALS or GIGACHAT_ACCESS_TOKEN or GIGACHAT_USER/PASSWORD."
+                "GigaChat auth not configured. Provide GIGA_CREDENTIALS or GIGA_ACCESS_TOKEN or GIGA_USER/PASSWORD."
             )
 
         # Retry customization (env overrides defaults, explicit args override env)
-        env_max_retries = os.environ.get("GIGACHAT_MAX_RETRIES")
-        env_backoff_base = os.environ.get("GIGACHAT_BACKOFF_BASE")
+        env_max_retries = os.environ.get("GIGA_MAX_RETRIES")
+        env_backoff_base = os.environ.get("GIGA_BACKOFF_BASE")
+
         try:
             env_max_retries_int = int(env_max_retries) if env_max_retries is not None else None
         except Exception:
@@ -78,6 +82,8 @@ class GigaChatSampler(SamplerBase):
         client_kwargs: dict[str, Any] = {}
         if self.base_url is not None:
             client_kwargs["base_url"] = self.base_url
+        if self.auth_url is not None:
+            client_kwargs["auth_url"] = self.auth_url
         if self.scope is not None:
             client_kwargs["scope"] = self.scope
         if self.verify_ssl_certs is not None:
@@ -181,17 +187,9 @@ class GigaChatSampler(SamplerBase):
                     actual_queried_message_list=message_list,
                     response_metadata=metadata,
                 )
-            except AuthenticationError as e:
-                trial = _retry_sleep(trial, "auth", e)
-                if trial >= self.max_retries:
-                    raise
-            except ResponseError as e:
-                trial = _retry_sleep(trial, "response", e)
-                if trial >= self.max_retries:
-                    raise
             except Exception as e:
+                # Retry on any error; SDK-specific exceptions may vary by version
                 trial = _retry_sleep(trial, "generic", e)
-                # after several retries, propagate
                 if trial >= self.max_retries:
                     raise
 
